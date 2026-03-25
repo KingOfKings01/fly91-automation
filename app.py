@@ -8,17 +8,9 @@ from concurrent.futures import ThreadPoolExecutor
 import threading
 import logging
 import tempfile
-import json
 import sys
-
-# Global imports with error handling for Vercel stability
-GLOBAL_IMPORT_ERROR = None
-try:
-    import pandas as pd
-    import automate_invoices as ai
-except Exception as e:
-    import traceback
-    GLOBAL_IMPORT_ERROR = f"{str(e)}\n{traceback.format_exc()}"
+import automate_invoices as ai
+import json
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -68,9 +60,6 @@ def index():
 
 @app.route('/upload_excel', methods=['POST'])
 def upload_excel():
-    if GLOBAL_IMPORT_ERROR:
-        return jsonify({'error': f"Server Startup Error (Imports Failed): {GLOBAL_IMPORT_ERROR}"}), 500
-        
     if 'excel' not in request.files:
         return jsonify({'error': 'No file part'}), 400
     file = request.files['excel']
@@ -86,35 +75,34 @@ def upload_excel():
             os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
             file.save(filepath)
             
-            df = ai.get_excel_data_rows(filepath)
-            if df.empty:
+            rows = ai.get_excel_data_rows(filepath)
+            if not rows:
                 return jsonify({'error': 'Excel file contains no data rows (Invoicenumber column must not be empty)'}), 400
                 
-            # Cache data in memory so we can delete the file immediately
-            cached_rows = df.to_json(orient='records')
-            first_row = {
-                'index': 0,
-                'invoice_no': str(df.iloc[0].get('Invoicenumber', 'N/A')),
-                'customer': str(df.iloc[0].get('Customer Name ', 'N/A')),
-                'pnr': str(df.iloc[0].get('PNRNumber', 'N/A'))
-            }
             # Store full data keyed by session token so we never need the file again
             with progress_lock:
                 batch_progress[unique_filename] = {
-                    'cached_df': cached_rows,
+                    'cached_rows': rows,
                     'excel_path': filepath  # kept only for address sheet lookup
                 }
+            
+            first_row = {
+                'index': 0,
+                'invoice_no': str(rows[0].get('Invoicenumber', 'N/A')),
+                'customer': str(rows[0].get('Customer Name ', 'N/A')),
+                'pnr': str(rows[0].get('PNRNumber', 'N/A'))
+            }
+            
             return jsonify({
                 'success': True,
                 'first_row': first_row,
-                'total_rows': len(df),
+                'total_rows': len(rows),
                 'filename': unique_filename
             })
         except Exception as e:
             import traceback
             error_details = traceback.format_exc()
             logger.error(f"Upload process failed: {error_details}")
-            print(f"DEBUG: Upload error: {e}") # Visible in local terminal
             if os.path.exists(filepath): os.remove(filepath)
             return jsonify({'error': f"Processing Error: {str(e)}"}), 500
     return jsonify({'error': 'Invalid file type'}), 400
@@ -186,14 +174,18 @@ def preview_first():
         seal_pos_obj = sign_pos_obj = None
 
     _cleanup_old_previews()
-    import automate_invoices as ai
-    df = ai.get_excel_data_rows(excel_path)
-    data = ai.get_invoicing_data(df, 0, excel_path)
+    rows = ai.get_excel_data_rows(excel_path)
+    if not rows:
+        return "Excel file is empty or invalid", 400
+    
+    lookups = ai.get_lookups(excel_path)
+    data = ai.get_invoicing_data(rows[0], lookups)
 
     pdf_filename = f"preview_{uuid.uuid4().hex}.pdf"
     pdf_path = os.path.join(app.config['TEMP_OUTPUT'], pdf_filename)
 
-    ai.generate_kind_pdf(data, pdf_path, seal_pos=seal_pos_obj, sign_pos=sign_pos_obj)
+    # First preview is ALWAYS clean (no baked-in images) as requested
+    ai.generate_kind_pdf(data, pdf_path, seal_pos=None, sign_pos=None)
 
     return render_template('preview.html',
                            pdf_url=url_for('get_temp_pdf', filename=pdf_filename),
@@ -212,9 +204,12 @@ def refresh_preview():
         return jsonify({'error': 'Excel file not found'}), 404
 
     _cleanup_old_previews()
-    import automate_invoices as ai
-    df = ai.get_excel_data_rows(excel_path)
-    data = ai.get_invoicing_data(df, 0, excel_path)
+    rows = ai.get_excel_data_rows(excel_path)
+    if not rows:
+        return jsonify({'error': 'Excel file is empty or invalid'}), 400
+    
+    lookups = ai.get_lookups(excel_path)
+    data = ai.get_invoicing_data(rows[0], lookups)
 
     pdf_filename = f"preview_{uuid.uuid4().hex}.pdf"
     pdf_path = os.path.join(app.config['TEMP_OUTPUT'], pdf_filename)
@@ -247,11 +242,10 @@ def get_batch_progress(session_id):
     with progress_lock:
         return jsonify(batch_progress.get(session_id, {'current': 0, 'total': 0, 'status': 'unknown'}))
 
-def process_single_pdf(i, df, excel_path, session_dir, seal_pos, sign_pos, session_id):
+def process_single_pdf(i, rows, lookups, session_dir, seal_pos, sign_pos, session_id):
     try:
-        import automate_invoices as ai
-        data = ai.get_invoicing_data(df, i, excel_path)
-        if not data['invoice_no'] or data['invoice_no'] == 'nan': 
+        data = ai.get_invoicing_data(rows[i], lookups)
+        if not data['invoice_no'] or str(data['invoice_no']).lower() == 'nan': 
             with progress_lock:
                 batch_progress[session_id]['current'] += 1
             return
@@ -275,14 +269,14 @@ def process_single_pdf(i, df, excel_path, session_dir, seal_pos, sign_pos, sessi
 def run_background_batch(session_id, excel_path, session_dir, seal_pos, sign_pos):
     with app.app_context():
         try:
-            import automate_invoices as ai
-            df = ai.get_excel_data_rows(excel_path)
+            rows = ai.get_excel_data_rows(excel_path)
+            lookups = ai.get_lookups(excel_path)
             with progress_lock:
-                batch_progress[session_id] = {'current': 0, 'total': len(df), 'status': 'processing'}
+                batch_progress[session_id] = {'current': 0, 'total': len(rows), 'status': 'processing'}
 
             with ThreadPoolExecutor(max_workers=10) as executor:
-                for i in range(len(df)):
-                    executor.submit(process_single_pdf, i, df, excel_path, session_dir, seal_pos, sign_pos, session_id)
+                for i in range(len(rows)):
+                    executor.submit(process_single_pdf, i, rows, lookups, session_dir, seal_pos, sign_pos, session_id)
 
             zip_filename = f"Invoices_{session_id}.zip"
             zip_path = os.path.join(app.config['TEMP_OUTPUT'], zip_filename)

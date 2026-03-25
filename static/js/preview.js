@@ -38,9 +38,8 @@ function updateStats(el) {
     const y = pxToMm(rect.top - containerRect.top);
     const w = pxToMm(rect.width);
     const type = el.classList.contains('seal') ? 'seal' : 'sign';
-    document.getElementById(`${type}-x`).textContent = Math.round(x);
-    document.getElementById(`${type}-y`).textContent = Math.round(y);
-    document.getElementById(`${type}-w`).textContent = Math.round(w);
+    
+    // Position numbers are no longer shown in sidebar as requested
     localStorage.setItem(`fly91_${type}_pos`, JSON.stringify({x, y, w}));
 }
 
