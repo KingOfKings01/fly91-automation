@@ -27,24 +27,32 @@ document.getElementById('excelForm').addEventListener('submit', async (e) => {
             method: 'POST',
             body: formData
         });
-        const data = await response.json();
-        if (data.success) {
-            // Check for saved positions to provide "auto-align" on first load
-            const sealPos = localStorage.getItem('fly91_seal_pos');
-            const signPos = localStorage.getItem('fly91_sign_pos');
-            let redirectUrl = `/preview_first?excel=${data.filename}`;
-            if (sealPos) redirectUrl += `&seal_pos=${encodeURIComponent(sealPos)}`;
-            if (signPos) redirectUrl += `&sign_pos=${encodeURIComponent(signPos)}`;
-            
-            window.location.href = redirectUrl;
+        
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.indexOf("application/json") !== -1) {
+            const data = await response.json();
+            if (data.success) {
+                const sealPos = localStorage.getItem('fly91_seal_pos');
+                const signPos = localStorage.getItem('fly91_sign_pos');
+                let redirectUrl = `/preview_first?excel=${data.filename}`;
+                if (sealPos) redirectUrl += `&seal_pos=${encodeURIComponent(sealPos)}`;
+                if (signPos) redirectUrl += `&sign_pos=${encodeURIComponent(signPos)}`;
+                window.location.href = redirectUrl;
+            } else {
+                alert('Server Error: ' + (data.error || 'Upload failed'));
+                btn.textContent = originalText;
+                btn.disabled = false;
+                btn.style.opacity = '1';
+            }
         } else {
-            alert(data.error || 'Upload failed');
+            const text = await response.text();
+            alert('Upload Failed (Non-JSON Response): ' + text.substring(0, 200));
             btn.textContent = originalText;
             btn.disabled = false;
             btn.style.opacity = '1';
         }
     } catch (err) {
-        alert('An error occurred during upload');
+        alert('An error occurred: ' + err.message);
         btn.textContent = originalText;
         btn.disabled = false;
         btn.style.opacity = '1';

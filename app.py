@@ -74,6 +74,9 @@ def upload_excel():
         
         try:
             df = ai.get_excel_data_rows(filepath)
+            if df.empty:
+                return jsonify({'error': 'Excel file contains no data rows (Invoicenumber column must not be empty)'}), 400
+                
             # Cache data in memory so we can delete the file immediately
             cached_rows = df.to_json(orient='records')
             first_row = {
@@ -95,8 +98,11 @@ def upload_excel():
                 'filename': unique_filename
             })
         except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
+            logger.error(f"Upload error: {error_details}")
             if os.path.exists(filepath): os.remove(filepath)
-            return jsonify({'error': str(e)}), 500
+            return jsonify({'error': str(e), 'details': error_details if app.debug else None}), 500
     return jsonify({'error': 'Invalid file type'}), 400
 
 @app.route('/upload_media', methods=['POST'])
