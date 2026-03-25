@@ -1,27 +1,29 @@
 import os
-import pandas as pd
 from flask import Flask, render_template, request, jsonify, send_from_directory, url_for, send_file
 from werkzeug.utils import secure_filename
-import automate_invoices as ai
 import uuid
 import zipfile
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 import threading
-
 import logging
 import tempfile
+import json
+import sys
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-# Use /tmp for Vercel deployment (read-only filesystem elsewhere)
-app.config['UPLOAD_FOLDER'] = os.path.join(tempfile.gettempdir(), 'fly91_uploads')
-app.config['TEMP_OUTPUT'] = os.path.join(tempfile.gettempdir(), 'fly91_temp_output')
+
+# Explicitly use /tmp on Linux/Vercel
+base_temp = '/tmp' if sys.platform.startswith('linux') else tempfile.gettempdir()
+
+app.config['UPLOAD_FOLDER'] = os.path.join(base_temp, 'fly91_uploads')
+app.config['TEMP_OUTPUT'] = os.path.join(base_temp, 'fly91_temp_output')
 app.config['REPO_MEDIA_FOLDER'] = os.path.join(os.path.dirname(__file__), 'media')
-app.config['UPLOADED_MEDIA_FOLDER'] = os.path.join(tempfile.gettempdir(), 'fly91_media')
+app.config['UPLOADED_MEDIA_FOLDER'] = os.path.join(base_temp, 'fly91_media')
 app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024
 
 def ensure_dirs():
@@ -63,6 +65,8 @@ def upload_excel():
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
     if file and allowed_file(file.filename, ALLOWED_EXTENSIONS_EXCEL):
+        import pandas as pd
+        import automate_invoices as ai
         filename = secure_filename(file.filename)
         unique_filename = f"{uuid.uuid4().hex}_{filename}"
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
@@ -153,6 +157,7 @@ def preview_first():
         return "Excel file not found", 404
 
     _cleanup_old_previews()
+    import automate_invoices as ai
     df = ai.get_excel_data_rows(excel_path)
     data = ai.get_invoicing_data(df, 0, excel_path)
 
@@ -178,6 +183,7 @@ def refresh_preview():
         return jsonify({'error': 'Excel file not found'}), 404
 
     _cleanup_old_previews()
+    import automate_invoices as ai
     df = ai.get_excel_data_rows(excel_path)
     data = ai.get_invoicing_data(df, 0, excel_path)
 
@@ -214,6 +220,7 @@ def get_batch_progress(session_id):
 
 def process_single_pdf(i, df, excel_path, session_dir, seal_pos, sign_pos, session_id):
     try:
+        import automate_invoices as ai
         data = ai.get_invoicing_data(df, i, excel_path)
         if not data['invoice_no'] or data['invoice_no'] == 'nan': 
             with progress_lock:
@@ -239,6 +246,7 @@ def process_single_pdf(i, df, excel_path, session_dir, seal_pos, sign_pos, sessi
 def run_background_batch(session_id, excel_path, session_dir, seal_pos, sign_pos):
     with app.app_context():
         try:
+            import automate_invoices as ai
             df = ai.get_excel_data_rows(excel_path)
             with progress_lock:
                 batch_progress[session_id] = {'current': 0, 'total': len(df), 'status': 'processing'}
