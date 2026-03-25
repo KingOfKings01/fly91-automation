@@ -9,11 +9,10 @@ import shutil
 from concurrent.futures import ThreadPoolExecutor
 import threading
 
+import logging
 import tempfile
 
-import logging
-
-# Configure logging for Vercel logs
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -21,17 +20,27 @@ app = Flask(__name__)
 # Use /tmp for Vercel deployment (read-only filesystem elsewhere)
 app.config['UPLOAD_FOLDER'] = os.path.join(tempfile.gettempdir(), 'fly91_uploads')
 app.config['TEMP_OUTPUT'] = os.path.join(tempfile.gettempdir(), 'fly91_temp_output')
-
-# Media: Repository defaults (read-only) vs Uploaded (read-write in /tmp)
 app.config['REPO_MEDIA_FOLDER'] = os.path.join(os.path.dirname(__file__), 'media')
 app.config['UPLOADED_MEDIA_FOLDER'] = os.path.join(tempfile.gettempdir(), 'fly91_media')
-
 app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024
 
-# Ensure directories exist (only for /tmp ones)
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-os.makedirs(app.config['TEMP_OUTPUT'], exist_ok=True)
-os.makedirs(app.config['UPLOADED_MEDIA_FOLDER'], exist_ok=True)
+def ensure_dirs():
+    """Ensure all required directories exist. Called before first file operation."""
+    for path in [app.config['UPLOAD_FOLDER'], app.config['TEMP_OUTPUT'], app.config['UPLOADED_MEDIA_FOLDER']]:
+        if not os.path.exists(path):
+            try:
+                os.makedirs(path, exist_ok=True)
+                logger.info(f"Created directory: {path}")
+            except Exception as e:
+                logger.error(f"Failed to create {path}: {e}")
+
+@app.route('/health')
+def health():
+    return "OK", 200
+
+@app.before_request
+def before_request():
+    ensure_dirs()
 
 ALLOWED_EXTENSIONS_EXCEL = {'xlsx', 'xlsm', 'xls'}
 ALLOWED_EXTENSIONS_IMG = {'png', 'jpg', 'jpeg'}
@@ -39,7 +48,6 @@ ALLOWED_EXTENSIONS_IMG = {'png', 'jpg', 'jpeg'}
 # Progress tracking
 batch_progress = {}
 progress_lock = threading.Lock()
-
 def allowed_file(filename, allowed_set):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_set
 
