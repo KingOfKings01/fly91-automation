@@ -65,14 +65,18 @@ def upload_excel():
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
     if file and allowed_file(file.filename, ALLOWED_EXTENSIONS_EXCEL):
-        import pandas as pd
-        import automate_invoices as ai
         filename = secure_filename(file.filename)
         unique_filename = f"{uuid.uuid4().hex}_{filename}"
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
-        file.save(filepath)
         
         try:
+            # Ensure directories exist exactly before saving
+            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+            file.save(filepath)
+            
+            import pandas as pd
+            import automate_invoices as ai
+            
             df = ai.get_excel_data_rows(filepath)
             if df.empty:
                 return jsonify({'error': 'Excel file contains no data rows (Invoicenumber column must not be empty)'}), 400
@@ -100,9 +104,10 @@ def upload_excel():
         except Exception as e:
             import traceback
             error_details = traceback.format_exc()
-            logger.error(f"Upload error: {error_details}")
+            logger.error(f"Upload process failed: {error_details}")
+            print(f"DEBUG: Upload error: {e}") # Visible in local terminal
             if os.path.exists(filepath): os.remove(filepath)
-            return jsonify({'error': str(e), 'details': error_details if app.debug else None}), 500
+            return jsonify({'error': f"Processing Error: {str(e)}"}), 500
     return jsonify({'error': 'Invalid file type'}), 400
 
 @app.route('/upload_media', methods=['POST'])
