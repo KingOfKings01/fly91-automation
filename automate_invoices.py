@@ -1,6 +1,6 @@
-import pandas as pd
-import os
 from fpdf import FPDF
+import tempfile
+import pandas as pd
 from num2words import num2words
 import warnings
 import datetime
@@ -12,9 +12,16 @@ warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 EXCEL_FILE = 'Baggage invoicing.xlsm'
 OUTPUT_BASE_DIR = 'Invoices_Output_Final'
 MEDIA_DIR = os.path.join(os.path.dirname(__file__), 'media')
+UPLOAD_MEDIA_DIR = os.path.join(tempfile.gettempdir(), 'fly91_media')
+
 LOGO_PATH = os.path.join(MEDIA_DIR, 'image1.png')
-SEAL_PATH = os.path.join(MEDIA_DIR, 'image2.png')
-SIGN_PATH = os.path.join(MEDIA_DIR, 'image3.png')
+# Seal and Sign: Check UPLOAD_MEDIA_DIR (/tmp) first, then repo defaults
+SEAL_PATH = os.path.join(UPLOAD_MEDIA_DIR, 'image2.png')
+if not os.path.exists(SEAL_PATH): SEAL_PATH = os.path.join(MEDIA_DIR, 'image2.png')
+
+SIGN_PATH = os.path.join(UPLOAD_MEDIA_DIR, 'image3.png')
+if not os.path.exists(SIGN_PATH): SIGN_PATH = os.path.join(MEDIA_DIR, 'image3.png')
+
 FOOTER_IMAGE_PATH = os.path.join(MEDIA_DIR, 'image4.jpg')
 
 class ProfessionalInvoice(FPDF):

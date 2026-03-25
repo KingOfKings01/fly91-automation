@@ -11,17 +11,27 @@ import threading
 
 import tempfile
 
+import logging
+
+# Configure logging for Vercel logs
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 app = Flask(__name__)
 # Use /tmp for Vercel deployment (read-only filesystem elsewhere)
 app.config['UPLOAD_FOLDER'] = os.path.join(tempfile.gettempdir(), 'fly91_uploads')
-app.config['MEDIA_FOLDER'] = os.path.join(os.path.dirname(__file__), 'media')
 app.config['TEMP_OUTPUT'] = os.path.join(tempfile.gettempdir(), 'fly91_temp_output')
+
+# Media: Repository defaults (read-only) vs Uploaded (read-write in /tmp)
+app.config['REPO_MEDIA_FOLDER'] = os.path.join(os.path.dirname(__file__), 'media')
+app.config['UPLOADED_MEDIA_FOLDER'] = os.path.join(tempfile.gettempdir(), 'fly91_media')
+
 app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024
 
-# Ensure directories exist
+# Ensure directories exist (only for /tmp ones)
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-os.makedirs(app.config['MEDIA_FOLDER'], exist_ok=True)
 os.makedirs(app.config['TEMP_OUTPUT'], exist_ok=True)
+os.makedirs(app.config['UPLOADED_MEDIA_FOLDER'], exist_ok=True)
 
 ALLOWED_EXTENSIONS_EXCEL = {'xlsx', 'xlsm', 'xls'}
 ALLOWED_EXTENSIONS_IMG = {'png', 'jpg', 'jpeg'}
@@ -86,14 +96,18 @@ def upload_media():
         else:
             return jsonify({'error': 'Invalid type'}), 400
             
-        filepath = os.path.join(app.config['MEDIA_FOLDER'], target_name)
+        filepath = os.path.join(app.config['UPLOADED_MEDIA_FOLDER'], target_name)
         file.save(filepath)
         return jsonify({'success': True, 'url': url_for('get_media', filename=target_name, _t=os.path.getmtime(filepath))})
     return jsonify({'error': 'Invalid file type'}), 400
 
 @app.route('/media/<filename>')
 def get_media(filename):
-    return send_from_directory(app.config['MEDIA_FOLDER'], filename)
+    # Check /tmp first, then repo defaults
+    tmp_path = os.path.join(app.config['UPLOADED_MEDIA_FOLDER'], filename)
+    if os.path.exists(tmp_path):
+        return send_from_directory(app.config['UPLOADED_MEDIA_FOLDER'], filename)
+    return send_from_directory(app.config['REPO_MEDIA_FOLDER'], filename)
 
 @app.route('/preview_first')
 def preview_first():
