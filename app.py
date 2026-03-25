@@ -11,6 +11,15 @@ import tempfile
 import json
 import sys
 
+# Global imports with error handling for Vercel stability
+GLOBAL_IMPORT_ERROR = None
+try:
+    import pandas as pd
+    import automate_invoices as ai
+except Exception as e:
+    import traceback
+    GLOBAL_IMPORT_ERROR = f"{str(e)}\n{traceback.format_exc()}"
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -59,6 +68,9 @@ def index():
 
 @app.route('/upload_excel', methods=['POST'])
 def upload_excel():
+    if GLOBAL_IMPORT_ERROR:
+        return jsonify({'error': f"Server Startup Error (Imports Failed): {GLOBAL_IMPORT_ERROR}"}), 500
+        
     if 'excel' not in request.files:
         return jsonify({'error': 'No file part'}), 400
     file = request.files['excel']
@@ -73,9 +85,6 @@ def upload_excel():
             # Ensure directories exist exactly before saving
             os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
             file.save(filepath)
-            
-            import pandas as pd
-            import automate_invoices as ai
             
             df = ai.get_excel_data_rows(filepath)
             if df.empty:
