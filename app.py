@@ -70,15 +70,23 @@ def upload_excel():
         
         try:
             df = ai.get_excel_data_rows(filepath)
+            # Cache data in memory so we can delete the file immediately
+            cached_rows = df.to_json(orient='records')
             first_row = {
                 'index': 0,
                 'invoice_no': str(df.iloc[0].get('Invoicenumber', 'N/A')),
                 'customer': str(df.iloc[0].get('Customer Name ', 'N/A')),
                 'pnr': str(df.iloc[0].get('PNRNumber', 'N/A'))
             }
+            # Store full data keyed by session token so we never need the file again
+            with progress_lock:
+                batch_progress[unique_filename] = {
+                    'cached_df': cached_rows,
+                    'excel_path': filepath  # kept only for address sheet lookup
+                }
             return jsonify({
-                'success': True, 
-                'first_row': first_row, 
+                'success': True,
+                'first_row': first_row,
                 'total_rows': len(df),
                 'filename': unique_filename
             })
@@ -117,26 +125,44 @@ def get_media(filename):
         return send_from_directory(app.config['UPLOADED_MEDIA_FOLDER'], filename)
     return send_from_directory(app.config['REPO_MEDIA_FOLDER'], filename)
 
+def _cleanup_old_previews():
+    """Delete all preview_*.pdf files older than 5 minutes from TEMP_OUTPUT."""
+    import time
+    temp_dir = app.config['TEMP_OUTPUT']
+    now = time.time()
+    try:
+        for f in os.listdir(temp_dir):
+            if f.startswith('preview_') and f.endswith('.pdf'):
+                fp = os.path.join(temp_dir, f)
+                try:
+                    if now - os.path.getmtime(fp) > 300:
+                        os.remove(fp)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
 @app.route('/preview_first')
 def preview_first():
     excel_filename = request.args.get('excel')
     if not excel_filename:
         return "Missing excel filename", 400
-    
+
     excel_path = os.path.join(app.config['UPLOAD_FOLDER'], excel_filename)
     if not os.path.exists(excel_path):
         return "Excel file not found", 404
-        
+
+    _cleanup_old_previews()
     df = ai.get_excel_data_rows(excel_path)
     data = ai.get_invoicing_data(df, 0, excel_path)
-    
+
     pdf_filename = f"preview_{uuid.uuid4().hex}.pdf"
     pdf_path = os.path.join(app.config['TEMP_OUTPUT'], pdf_filename)
-    
+
     ai.generate_kind_pdf(data, pdf_path)
-    
-    return render_template('preview.html', 
-                           pdf_url=url_for('get_temp_pdf', filename=pdf_filename), 
+
+    return render_template('preview.html',
+                           pdf_url=url_for('get_temp_pdf', filename=pdf_filename),
                            excel_filename=excel_filename,
                            invoice_no=data['invoice_no'])
 
@@ -146,21 +172,40 @@ def refresh_preview():
     excel_filename = req_data.get('excel_filename')
     seal_pos = req_data.get('seal_pos')
     sign_pos = req_data.get('sign_pos')
-    
+
     excel_path = os.path.join(app.config['UPLOAD_FOLDER'], excel_filename)
+    if not os.path.exists(excel_path):
+        return jsonify({'error': 'Excel file not found'}), 404
+
+    _cleanup_old_previews()
     df = ai.get_excel_data_rows(excel_path)
     data = ai.get_invoicing_data(df, 0, excel_path)
-    
+
     pdf_filename = f"preview_{uuid.uuid4().hex}.pdf"
     pdf_path = os.path.join(app.config['TEMP_OUTPUT'], pdf_filename)
-    
+
     ai.generate_kind_pdf(data, pdf_path, seal_pos=seal_pos, sign_pos=sign_pos)
-    
+
     return jsonify({'success': True, 'pdf_url': url_for('get_temp_pdf', filename=pdf_filename)})
 
 @app.route('/temp_pdf/<filename>')
 def get_temp_pdf(filename):
-    return send_from_directory(app.config['TEMP_OUTPUT'], filename)
+    file_path = os.path.join(app.config['TEMP_OUTPUT'], filename)
+    if not os.path.exists(file_path):
+        return "File not found", 404
+    # Stream the file then delete it if it is a zip (already downloaded)
+    def _send_and_delete():
+        response = send_from_directory(app.config['TEMP_OUTPUT'], filename)
+        if filename.endswith('.zip'):
+            @response.call_on_close
+            def _del():
+                try:
+                    os.remove(file_path)
+                    logger.info(f"Deleted temp zip: {file_path}")
+                except Exception:
+                    pass
+        return response
+    return _send_and_delete()
 
 @app.route('/batch_progress/<session_id>')
 def get_batch_progress(session_id):
@@ -197,29 +242,38 @@ def run_background_batch(session_id, excel_path, session_dir, seal_pos, sign_pos
             df = ai.get_excel_data_rows(excel_path)
             with progress_lock:
                 batch_progress[session_id] = {'current': 0, 'total': len(df), 'status': 'processing'}
-            
+
             with ThreadPoolExecutor(max_workers=10) as executor:
                 for i in range(len(df)):
                     executor.submit(process_single_pdf, i, df, excel_path, session_dir, seal_pos, sign_pos, session_id)
-            
+
             zip_filename = f"Invoices_{session_id}.zip"
             zip_path = os.path.join(app.config['TEMP_OUTPUT'], zip_filename)
-            
+
             with zipfile.ZipFile(zip_path, 'w') as zipf:
                 for root, dirs, files in os.walk(session_dir):
                     for file in files:
                         file_path = os.path.join(root, file)
                         arcname = os.path.relpath(file_path, session_dir)
                         zipf.write(file_path, arcname)
-            
-            shutil.rmtree(session_dir)
-            if os.path.exists(excel_path): os.remove(excel_path)
-            
+
+            # Clean up session PDFs and the uploaded excel immediately
+            shutil.rmtree(session_dir, ignore_errors=True)
+            if os.path.exists(excel_path):
+                os.remove(excel_path)
+                logger.info(f"Deleted uploaded excel: {excel_path}")
+
             with progress_lock:
                 batch_progress[session_id]['status'] = 'completed'
                 batch_progress[session_id]['zip_url'] = f"/temp_pdf/{zip_filename}"
+                # zip itself is deleted on download via get_temp_pdf
         except Exception as e:
-            print(f"Background batch error: {e}")
+            logger.error(f"Background batch error: {e}")
+            # Clean up on failure too
+            shutil.rmtree(session_dir, ignore_errors=True)
+            if os.path.exists(excel_path):
+                try: os.remove(excel_path)
+                except Exception: pass
             with progress_lock:
                 batch_progress[session_id]['status'] = 'error'
 

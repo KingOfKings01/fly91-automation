@@ -1,4 +1,5 @@
 from fpdf import FPDF
+import os
 import tempfile
 import pandas as pd
 from num2words import num2words
