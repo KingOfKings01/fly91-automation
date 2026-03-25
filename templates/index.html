@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fly91 - Premium Invoice Automation</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.5);
+            --accent: #f43f5e;
+            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg-gradient);
+            color: #f8fafc;
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .hero-container {
+            width: 100%;
+            max-width: 900px;
+            padding: 3rem;
+            animation: fadeIn 1s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 3rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(to right, #818cf8, #f472b6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        p.subtitle {
+            font-size: 1.1rem;
+            color: #94a3b8;
+        }
+
+        .upload-grid {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 2rem;
+        }
+
+        .step-card {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 16px;
+            padding: 1.5rem;
+            border: 1px solid var(--glass-border);
+            transition: all 0.3s ease;
+        }
+
+        .step-card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 0 20px var(--primary-glow);
+        }
+
+        h3 {
+            font-size: 1.25rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .step-num {
+            background: var(--primary);
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+        }
+
+        input[type="file"] {
+            display: block;
+            width: 100%;
+            padding: 0.75rem;
+            color: #94a3b8;
+            margin-bottom: 1.5rem;
+            border: 1px dashed var(--glass-border);
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .btn-fancy {
+            width: 100%;
+            padding: 1rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn-fancy:hover {
+            background: #4f46e5;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px var(--primary-glow);
+        }
+
+        .media-preview-row {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .preview-box {
+            flex: 1;
+            text-align: center;
+        }
+
+        .preview-box img {
+            max-width: 100%;
+            height: 50px;
+            object-fit: contain;
+            margin-top: 0.5rem;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.05);
+            padding: 4px;
+        }
+
+        .footer-note {
+            margin-top: 2rem;
+            text-align: center;
+            font-size: 0.85rem;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body>
+    <div class="hero-container">
+        <div class="glass-card">
+            <header>
+                <h1>Fly91</h1>
+                <p class="subtitle">Next-Generation PDF Automation Engine</p>
+            </header>
+
+            <div class="upload-grid">
+                <div class="step-card">
+                    <h3><span class="step-num">1</span> Dataset Source</h3>
+                    <p style="color: #64748b; margin-bottom: 1rem;">Select your Master Excel file containing invoice details.</p>
+                    <form id="excelForm">
+                        <input type="file" id="excelFile" name="excel" accept=".xlsx, .xlsm, .xls" required>
+                        <button type="submit" class="btn-fancy">Initialize Workflow</button>
+                    </form>
+                </div>
+
+                <div class="step-card">
+                    <h3><span class="step-num">2</span> Digital Assets</h3>
+                    <p style="color: #64748b; margin-bottom: 1rem;">Update Seal and Signature images to be applied.</p>
+                    <div class="media-uploads">
+                        <div class="media-item">
+                            <label style="font-size: 0.85rem; color: #94a3b8;">Corporate Seal</label>
+                            <input type="file" onchange="uploadMedia(this, 'seal')" accept="image/*">
+                        </div>
+                        <div class="media-item">
+                            <label style="font-size: 0.85rem; color: #94a3b8;">Auth Signature</label>
+                            <input type="file" onchange="uploadMedia(this, 'sign')" accept="image/*">
+                        </div>
+                    </div>
+                    <div class="media-preview-row">
+                        <div class="preview-box">
+                            <img id="sealPreview" src="/media/image2.png" alt="Seal" onerror="this.style.display='none'">
+                        </div>
+                        <div class="preview-box">
+                            <img id="signPreview" src="/media/image3.png" alt="Signature" onerror="this.style.display='none'">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer-note">
+                Positions configured once are applied across all generated documents.
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/index.js') }}"></script>
+</body>
+</html>

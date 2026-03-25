@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configure Invoice Layout - Fly91</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --secondary: #475569;
+            --accent: #22c55e;
+            --bg-dark: #0f172a;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg-dark);
+            color: #f1f5f9;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        .layout-container {
+            display: grid;
+            grid-template-rows: auto 1fr;
+            height: 100vh;
+        }
+
+        header {
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(8px);
+            padding: 1rem 2rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            overflow: hidden;
+        }
+
+        .control-panel {
+            background: rgba(30, 41, 59, 0.5);
+            padding: 1.5rem;
+            border-right: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            overflow-y: auto;
+        }
+
+        .workspace {
+            background: #334155;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: auto;
+            padding: 2rem;
+        }
+
+        .pdf-frame {
+            position: relative;
+            background: white;
+            box-shadow: 0 50px 100px -20px rgba(0,0,0,0.5);
+            width: 297mm;
+            height: 210mm;
+        }
+
+        #pdf-iframe {
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 50;
+        }
+
+        .draggable {
+            position: absolute;
+            cursor: move;
+            border: 2px dashed rgba(99, 102, 241, 0.5);
+            background: rgba(99, 102, 241, 0.1);
+            transition: border-color 0.2s;
+        }
+        .draggable:hover { border-color: var(--primary); }
+        .draggable img { width: 100%; height: 100%; pointer-events: none; }
+
+        .resizer {
+            position: absolute;
+            width: 12px; height: 12px;
+            background: var(--primary);
+            right: -6px; bottom: -6px;
+            border-radius: 50%;
+            cursor: nwse-resize;
+            box-shadow: 0 0 10px var(--primary);
+        }
+
+        /* Progress Modal */
+        #progress-modal {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        #progress-modal.visible {
+            display: flex;
+        }
+
+        .progress-box {
+            background: #1e293b;
+            padding: 3rem;
+            border-radius: 24px;
+            width: 100%; max-width: 500px;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .progress-bar-container {
+            width: 100%; height: 12px;
+            background: #334155;
+            border-radius: 6px;
+            margin: 2rem 0;
+            overflow: hidden;
+        }
+
+        #progress-bar {
+            width: 0%; height: 100%;
+            background: linear-gradient(to right, #6366f1, #f472b6);
+            transition: width 0.3s ease;
+        }
+
+        .btn-action {
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+        .btn-action:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .btn-confirm {
+            background: var(--primary); color: white;
+        }
+        .btn-confirm:hover:not(:disabled) { background: #4f46e5; transform: translateY(-1px); }
+
+        .btn-generate {
+            background: var(--accent); color: white;
+        }
+        .btn-generate:hover:not(:disabled) { background: #16a34a; transform: translateY(-1px); }
+
+        .step-indicator {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 1rem;
+        }
+        .step-indicator h4 {
+            margin: 0 0 0.5rem 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .step-indicator p {
+            margin: 0;
+            font-size: 0.8rem;
+            color: #94a3b8;
+        }
+        .step-num {
+            background: var(--primary);
+            width: 24px; height: 24px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            flex-shrink: 0;
+        }
+        .step-num.done {
+            background: var(--accent);
+        }
+
+        .pos-info {
+            font-size: 0.8rem;
+            color: #94a3b8;
+        }
+
+        #confirmed-badge {
+            display: none;
+            background: var(--accent);
+            color: white;
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div id="progress-modal">
+        <div class="progress-box">
+            <h3 id="progress-status">Generating Invoices...</h3>
+            <div class="progress-bar-container">
+                <div id="progress-bar"></div>
+            </div>
+            <p id="progress-text">Starting...</p>
+        </div>
+    </div>
+
+    <div class="layout-container">
+        <header>
+            <div class="logo" style="font-weight:600;">Fly91 Automator</div>
+            <div class="actions" style="display:flex; gap:0.75rem; align-items:center;">
+                <span id="confirmed-badge">✓ Layout Confirmed</span>
+                <button onclick="window.location.href='/'" class="btn-action" style="background: transparent; color: white; border: 1px solid rgba(255,255,255,0.2);">Cancel</button>
+                <button id="btn-confirm" onclick="confirmLayout()" class="btn-action btn-confirm">Step 1: Confirm Layout</button>
+                <button id="btn-generate" onclick="generateBatch()" class="btn-action btn-generate" disabled>Step 2: Generate All</button>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <div class="control-panel">
+                <div class="step-indicator">
+                    <h4><span class="step-num" id="step1-num">1</span> Position Images</h4>
+                    <p>Drag the Seal and Signature to where you want them on the invoice. Resize using the bottom-right handle.</p>
+                </div>
+
+                <div class="step-indicator">
+                    <h4><span class="step-num" id="step2-num">2</span> Confirm Layout</h4>
+                    <p>Click "Confirm Layout" to regenerate the first invoice with your positions baked in. Verify it looks correct.</p>
+                </div>
+
+                <div class="step-indicator">
+                    <h4><span class="step-num" id="step3-num">3</span> Generate All</h4>
+                    <p>Once confirmed, click "Generate All" to batch process every invoice with these exact positions.</p>
+                </div>
+
+                <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 0.5rem 0;">
+
+                <div>
+                    <h4 style="margin: 0 0 0.5rem 0; font-size: 0.9rem;">Seal Position</h4>
+                    <p class="pos-info">X: <span id="seal-x">0</span>mm &nbsp; Y: <span id="seal-y">0</span>mm &nbsp; W: <span id="seal-w">0</span>mm</p>
+                </div>
+                <div>
+                    <h4 style="margin: 0 0 0.5rem 0; font-size: 0.9rem;">Signature Position</h4>
+                    <p class="pos-info">X: <span id="sign-x">0</span>mm &nbsp; Y: <span id="sign-y">0</span>mm &nbsp; W: <span id="sign-w">0</span>mm</p>
+                </div>
+            </div>
+
+            <div class="workspace">
+                <div id="pdf-container" class="pdf-frame">
+                    <iframe id="pdf-iframe" src="{{ pdf_url }}#toolbar=0" frameborder="0"></iframe>
+                    <div id="overlay" class="overlay">
+                        <div id="seal-drag" class="draggable seal" style="left: 20mm; top: 155mm; width: 35mm; height: 35mm;">
+                            <img src="/media/image2.png" alt="Seal">
+                            <div class="resizer"></div>
+                        </div>
+                        <div id="sign-drag" class="draggable sign" style="left: 248mm; top: 160mm; width: 28mm; height: 18mm;">
+                            <img src="/media/image3.png" alt="Signature">
+                            <div class="resizer"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const excelFilename = "{{ excel_filename }}";
+    </script>
+    <script src="{{ url_for('static', filename='js/preview.js') }}"></script>
+</body>
+</html>
