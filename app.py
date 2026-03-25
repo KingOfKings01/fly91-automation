@@ -156,6 +156,15 @@ def preview_first():
     if not os.path.exists(excel_path):
         return "Excel file not found", 404
 
+    # Optional pre-saved positions for auto-align
+    seal_pos = request.args.get('seal_pos')
+    sign_pos = request.args.get('sign_pos')
+    try:
+        seal_pos_obj = json.loads(seal_pos) if seal_pos else None
+        sign_pos_obj = json.loads(sign_pos) if sign_pos else None
+    except:
+        seal_pos_obj = sign_pos_obj = None
+
     _cleanup_old_previews()
     import automate_invoices as ai
     df = ai.get_excel_data_rows(excel_path)
@@ -164,7 +173,7 @@ def preview_first():
     pdf_filename = f"preview_{uuid.uuid4().hex}.pdf"
     pdf_path = os.path.join(app.config['TEMP_OUTPUT'], pdf_filename)
 
-    ai.generate_kind_pdf(data, pdf_path)
+    ai.generate_kind_pdf(data, pdf_path, seal_pos=seal_pos_obj, sign_pos=sign_pos_obj)
 
     return render_template('preview.html',
                            pdf_url=url_for('get_temp_pdf', filename=pdf_filename),

@@ -7,16 +7,20 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary: #6366f1;
-            --secondary: #475569;
-            --accent: #22c55e;
-            --bg-dark: #0f172a;
+            --primary: #4f46e5;
+            --secondary: #64748b;
+            --accent: #10b981;
+            --bg-main: #f8fafc;
+            --card-bg: #ffffff;
+            --text-dark: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
         }
 
         body {
             font-family: 'Outfit', sans-serif;
-            background: var(--bg-dark);
-            color: #f1f5f9;
+            background: var(--bg-main);
+            color: var(--text-dark);
             margin: 0;
             overflow: hidden;
         }
@@ -28,52 +32,56 @@
         }
 
         header {
-            background: rgba(15, 23, 42, 0.8);
-            backdrop-filter: blur(8px);
-            padding: 1rem 2rem;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            padding: 1rem 2.5rem;
+            border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            z-index: 100;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
         }
 
         .main-content {
             display: grid;
-            grid-template-columns: 320px 1fr;
+            grid-template-columns: 340px 1fr;
             overflow: hidden;
         }
 
         .control-panel {
-            background: rgba(30, 41, 59, 0.5);
-            padding: 1.5rem;
-            border-right: 1px solid rgba(255,255,255,0.1);
+            background: var(--card-bg);
+            padding: 2rem;
+            border-right: 1px solid var(--border);
             display: flex;
             flex-direction: column;
-            gap: 1.25rem;
+            gap: 1.5rem;
             overflow-y: auto;
         }
 
         .workspace {
-            background: #334155;
+            background: #f1f5f9;
             display: flex;
             align-items: center;
             justify-content: center;
             overflow: auto;
-            padding: 2rem;
+            padding: 3rem;
         }
 
         .pdf-frame {
             position: relative;
             background: white;
-            box-shadow: 0 50px 100px -20px rgba(0,0,0,0.5);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
             width: 297mm;
             height: 210mm;
+            border-radius: 4px;
         }
 
         #pdf-iframe {
             width: 100%;
             height: 100%;
             pointer-events: none;
+            border-radius: 4px;
         }
 
         .overlay {
@@ -86,21 +94,22 @@
         .draggable {
             position: absolute;
             cursor: move;
-            border: 2px dashed rgba(99, 102, 241, 0.5);
-            background: rgba(99, 102, 241, 0.1);
-            transition: border-color 0.2s;
+            border: 2px dashed var(--primary);
+            background: rgba(79, 70, 229, 0.1);
+            transition: box-shadow 0.2s;
         }
-        .draggable:hover { border-color: var(--primary); }
+        .draggable:hover { box-shadow: 0 0 15px rgba(79, 70, 229, 0.3); }
         .draggable img { width: 100%; height: 100%; pointer-events: none; }
 
         .resizer {
             position: absolute;
-            width: 12px; height: 12px;
+            width: 14px; height: 14px;
             background: var(--primary);
-            right: -6px; bottom: -6px;
+            right: -7px; bottom: -7px;
             border-radius: 50%;
             cursor: nwse-resize;
-            box-shadow: 0 0 10px var(--primary);
+            box-shadow: 0 0 8px rgba(79, 70, 229, 0.5);
+            border: 2px solid white;
         }
 
         /* Progress Modal */
@@ -108,8 +117,8 @@
             position: fixed;
             top: 0; left: 0;
             width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8);
-            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
             z-index: 1000;
             display: none;
             align-items: center;
@@ -120,36 +129,38 @@
         }
 
         .progress-box {
-            background: #1e293b;
-            padding: 3rem;
-            border-radius: 24px;
-            width: 100%; max-width: 500px;
+            background: var(--card-bg);
+            padding: 4rem;
+            border-radius: 32px;
+            width: 100%; max-width: 520px;
             text-align: center;
-            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--border);
         }
 
         .progress-bar-container {
-            width: 100%; height: 12px;
-            background: #334155;
-            border-radius: 6px;
-            margin: 2rem 0;
+            width: 100%; height: 14px;
+            background: #f1f5f9;
+            border-radius: 10px;
+            margin: 2.5rem 0;
             overflow: hidden;
+            border: 1px solid var(--border);
         }
 
         #progress-bar {
             width: 0%; height: 100%;
-            background: linear-gradient(to right, #6366f1, #f472b6);
+            background: linear-gradient(to right, #4f46e5, #9333ea);
             transition: width 0.3s ease;
         }
 
         .btn-action {
-            padding: 0.75rem 1.5rem;
-            border-radius: 8px;
-            font-weight: 600;
+            padding: 0.85rem 1.75rem;
+            border-radius: 12px;
+            font-weight: 700;
             cursor: pointer;
             border: none;
             transition: all 0.2s;
-            font-size: 0.9rem;
+            font-size: 0.95rem;
         }
         .btn-action:disabled {
             opacity: 0.4;
@@ -158,58 +169,79 @@
 
         .btn-confirm {
             background: var(--primary); color: white;
+            box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
         }
-        .btn-confirm:hover:not(:disabled) { background: #4f46e5; transform: translateY(-1px); }
+        .btn-confirm:hover:not(:disabled) { background: #4338ca; transform: translateY(-1px); box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.3); }
 
         .btn-generate {
             background: var(--accent); color: white;
+            box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2);
         }
-        .btn-generate:hover:not(:disabled) { background: #16a34a; transform: translateY(-1px); }
+        .btn-generate:hover:not(:disabled) { background: #059669; transform: translateY(-1px); box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.3); }
 
         .step-indicator {
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 12px;
-            padding: 1rem;
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.25rem;
+            transition: all 0.3s;
         }
         .step-indicator h4 {
-            margin: 0 0 0.5rem 0;
+            margin: 0 0 0.75rem 0;
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.75rem;
+            font-size: 1.1rem;
+            font-weight: 700;
         }
         .step-indicator p {
             margin: 0;
-            font-size: 0.8rem;
-            color: #94a3b8;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            line-height: 1.5;
         }
         .step-num {
             background: var(--primary);
-            width: 24px; height: 24px;
-            border-radius: 50%;
+            color: white;
+            width: 28px; height: 28px;
+            border-radius: 8px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-size: 0.75rem;
+            font-size: 0.85rem;
             flex-shrink: 0;
         }
         .step-num.done {
             background: var(--accent);
         }
 
+        .pos-info-container {
+            background: #fbfcfe;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1rem;
+        }
+
         .pos-info {
-            font-size: 0.8rem;
-            color: #94a3b8;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+
+        .pos-info span {
+            color: var(--text-dark);
+            font-weight: 600;
         }
 
         #confirmed-badge {
             display: none;
-            background: var(--accent);
-            color: white;
-            padding: 0.4rem 0.8rem;
-            border-radius: 6px;
-            font-size: 0.8rem;
-            font-weight: 600;
+            background: #ecfdf5;
+            color: var(--accent);
+            padding: 0.5rem 1rem;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            border: 1px solid #d1fae5;
         }
     </style>
 </head>
@@ -252,14 +284,14 @@
                     <p>Once confirmed, click "Generate All" to batch process every invoice with these exact positions.</p>
                 </div>
 
-                <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 0.5rem 0;">
+                <hr style="border: none; border-top: 1px solid var(--border); margin: 0.5rem 0;">
 
-                <div>
-                    <h4 style="margin: 0 0 0.5rem 0; font-size: 0.9rem;">Seal Position</h4>
+                <div class="pos-info-container">
+                    <h4 style="margin: 0 0 0.5rem 0; font-size: 0.95rem; font-weight: 700;">📍 Seal Position</h4>
                     <p class="pos-info">X: <span id="seal-x">0</span>mm &nbsp; Y: <span id="seal-y">0</span>mm &nbsp; W: <span id="seal-w">0</span>mm</p>
                 </div>
-                <div>
-                    <h4 style="margin: 0 0 0.5rem 0; font-size: 0.9rem;">Signature Position</h4>
+                <div class="pos-info-container">
+                    <h4 style="margin: 0 0 0.5rem 0; font-size: 0.95rem; font-weight: 700;">📍 Signature Position</h4>
                     <p class="pos-info">X: <span id="sign-x">0</span>mm &nbsp; Y: <span id="sign-y">0</span>mm &nbsp; W: <span id="sign-w">0</span>mm</p>
                 </div>
             </div>
